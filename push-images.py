@@ -39,14 +39,16 @@ vc.set(cv.CV_CAP_PROP_FRAME_HEIGHT, frame_height)
 images_context = zmq_context.socket(zmq.PUB)
 #send_context.setsockopt(zmq.SUBSCRIBE,'')
 
-images_context.setsockopt(zmq.SNDBUF,5)
-images_context.setsockopt(zmq.RCVBUF,5)
-images_context.setsockopt(zmq.SNDHWM,2)
+images_context.setsockopt(zmq.SNDBUF,50000)
+images_context.setsockopt(zmq.RCVBUF,50000)
+images_context.setsockopt(zmq.SNDHWM,20)
 
 images_context.connect(images_endpoint)
 
 config_context = zmq_context.socket(zmq.PULL)
 config_context.connect(config_endpoint)
+
+encode_param=[int(cv2.IMWRITE_JPEG_QUALITY),jpeg_quality]
 
 
 def print_debug(text):
@@ -54,7 +56,7 @@ def print_debug(text):
 		print(text)
 
 def update_config_values():
-	global jpeg_quality, resize_frame_width, resize_frame_height
+	global jpeg_quality, resize_frame_width, resize_frame_height, encode_param
 	try:
 		config = config_context.recv_json(zmq.NOBLOCK)
 		print_debug("Config data :"+str(config))
@@ -62,6 +64,7 @@ def update_config_values():
 		if config["type"] == "config":
 			if config["name"] == "jpeg_quality":
 				jpeg_quality = int(config["value"])
+				encode_param=[int(cv2.IMWRITE_JPEG_QUALITY),jpeg_quality]
 			if config["name"] == "frame_resolution":
 				values = str(config["value"]).split("x")
 				resize_frame_width = int(values[0])
@@ -70,29 +73,34 @@ def update_config_values():
 	except zmq.error.Again:
 		pass
 
-def process_frame(frame):
+def process_frame():
+	global frame
 	if resize_frame_width != frame_width or resize_frame_height != frame_height:
 		frame = cv2.resize(frame, (resize_frame_width, resize_frame_height)) 
-		print_debug("Resixing frame to {}x{}".format(resize_frame_width,resize_frame_height))
+		print_debug("Resizing frame to {}x{}".format(resize_frame_width,resize_frame_height))
 
-def add_text(frame):
+def add_text():
+	global frame
 	height, width, depth = frame.shape
-	txt = "{}x{} {}% {}kB".format(width,height,jpeg_quality,int(len(numpy.array(frame).tostring())/1024))
+	txt = "{}x{} {}%".format(width,height,jpeg_quality)
 	cv2.putText(frame,txt, (10,100), cv2.FONT_HERSHEY_SIMPLEX, 1, 255)
 
-def send_frame(frame):
-	images_context.send(frame)
+def send_frame():
+	global frame 
+	ret, jpg = cv2.imencode( '.jpg', frame,encode_param)
+	images_context.send(jpg.tostring())
 
 while True:
 		
 	rval, frame = vc.read()
 
-	process_frame(frame)
+	process_frame()
 
 	if add_debug_text:
-		add_text(frame)
+		#pass
+		add_text()
 
-	send_frame(frame)
+	send_frame()
 
 	update_config_values()
 
