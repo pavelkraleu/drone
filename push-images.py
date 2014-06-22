@@ -5,14 +5,16 @@ import cv2
 import cv2.cv as cv
 import numpy
 import zmq
+import time
 
 
-if len(sys.argv) != 3:
-	print("Usage: "+sys.argv[0]+" tcp://10.8.0.1:2000 tcp://10.8.0.1:3000")
+if len(sys.argv) != 4:
+	print("Usage: "+sys.argv[0]+" tcp://10.8.0.1:2000 tcp://10.8.0.1:3000 tcp://10.8.0.1:4000")
 	sys.exit(1)
 
 images_endpoint = sys.argv[1]
 config_endpoint = sys.argv[2]
+bridge_endpoint = sys.argv[3]
 
 zmq_context = zmq.Context()
 
@@ -30,12 +32,19 @@ resize_frame_height = 720
 jpeg_quality = 10
 current_fps= 0
 
+metric_period = 1
+# 5 seconds
+last_metric_exec = time.time()
+
+frame_count = 0
+
 vc = cv2.VideoCapture(0)
 
 vc.set(cv.CV_CAP_PROP_FRAME_WIDTH, frame_width)
 vc.set(cv.CV_CAP_PROP_FRAME_HEIGHT, frame_height)
 
 
+# Create images endpoint
 images_context = zmq_context.socket(zmq.PUB)
 #send_context.setsockopt(zmq.SUBSCRIBE,'')
 
@@ -45,8 +54,16 @@ images_context.setsockopt(zmq.SNDHWM,20)
 
 images_context.connect(images_endpoint)
 
+
+# Create configuration endpoint
 config_context = zmq_context.socket(zmq.PULL)
 config_context.connect(config_endpoint)
+
+
+# Create metrics endpoint
+metrics_context = zmq_context.socket(zmq.PUSH)
+metrics_context.connect(bridge_endpoint)
+
 
 encode_param=[int(cv2.IMWRITE_JPEG_QUALITY),jpeg_quality]
 
@@ -86,9 +103,29 @@ def add_text():
 	cv2.putText(frame,txt, (10,100), cv2.FONT_HERSHEY_SIMPLEX, 1, 255)
 
 def send_frame():
-	global frame 
+	global frame,frame_count
 	ret, jpg = cv2.imencode( '.jpg', frame,encode_param)
 	images_context.send(jpg.tostring())
+	frame_count += 1
+
+def process_merics():
+	global last_metric_exec, frame_count
+
+	if time.time() >= (last_metric_exec + metric_period):
+		print("Sending metrics : ")
+
+		fps = frame_count / metric_period
+		print_debug("FPS : "+str(fps))
+
+		packet = {"type":"metrics-push","name":"fps","value":fps}
+		print_debug(packet)
+
+		metrics_context.send_json(packet)
+
+
+		frame_count = 0
+		last_metric_exec = time.time()
+
 
 while True:
 		
@@ -104,6 +141,11 @@ while True:
 
 	update_config_values()
 
+	process_merics()
+
+	
+
+	
 
 
 
