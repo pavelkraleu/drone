@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+   <head>
+      <script type="text/javascript">
+         var sock = null;
+         var ellog = null;
+         var seq= 0;
+         var frame_num = 1;
+         var image_size = 0;
+
+         window.onload = function() {
+
+
+
+            var wsuri;
+            ellog = document.getElementById('log');
+
+            if (window.location.protocol === "file:") {
+               wsuri = "ws://bee.pavelkral.eu:9000";
+            } else {
+               wsuri = "ws://" + window.location.hostname + ":9000";
+            }
+
+            if ("WebSocket" in window) {
+               sock = new WebSocket(wsuri);
+            } else if ("MozWebSocket" in window) {
+               sock = new MozWebSocket(wsuri);
+            } else {
+               log("Browser does not support WebSocket!");
+               window.location = "http://autobahn.ws/unsupportedbrowser";
+            }
+
+            if (sock) {
+               sock.onopen = function() {
+                  log("Connected to " + wsuri);
+                  
+               }
+
+               sock.onclose = function(e) {
+                  log("Connection closed (wasClean = " + e.wasClean + ", code = " + e.code + ", reason = '" + e.reason + "')");
+                  sock = null;
+               }
+
+               sock.onmessage = function(e) {
+                     var image = document.getElementById('image');
+                     image.src = 'data:image/jpg;base64,'+e.data;
+                     frame_num++;
+                     image_size = e.data.length;
+               }
+            }
+
+            setInterval(function(){sendTick()}, 1000);
+         };
+
+         function sendTick(){
+            msg = "{\"type\":\"tick_client\",\"seq\":"+seq+"}";
+            if (sock) {
+               sock.send(msg);
+               seq++;
+               log("Sent: " + msg);
+             //log("HEllo");
+            } else {
+               log("Not connected.");
+            }
+            //setTimeout(sendTick(), 1000);
+            updateFPS();
+         }
+
+
+         function updateFPS(){
+            log("FPS: " + frame_num);
+            tokb = (image_size / 1024).toFixed(2) ;
+            document.getElementById("fps").innerHTML = "FPS: " + frame_num + "<br/>"+tokb+" kB";
+            frame_num=0
+
+         }
+
+         function broadcast() {
+            var msg = document.getElementById('message').value;
+            if (sock) {
+               sock.send(msg);
+               log("Sent: " + msg);
+            } else {
+               log("Not connected.");
+            }
+         };
+
+         function log(m) {
+            ellog.innerHTML += m + '\n';
+            ellog.scrollTop = ellog.scrollHeight;
+         };
+      </script>
+   </head>
+   <body>
+
+      <noscript>You must enable JavaScript</noscript>
+
+      <style>
+         section {
+             width: 96%;
+             height: 480px;
+             background: aqua;
+             margin: auto;
+             padding: 10px;
+         }
+         div#one {
+             width: 640px;
+             height: 480px;
+             
+             float: left;
+         }
+         div#two {
+             margin-left: 15%;
+             height: 480px;
+             background: white;
+         }
+
+      </style>
+
+      <section>
+         <div id="one">
+            <img id="image" src="" width="640" height="480">
+         </div>
+         <div id="two">
+            <div id="fps"></div>
+         </div>
+      </section>
+
+      
+
+      <pre id="log" style="height: 160px; overflow-y: scroll; background-color: #faa;"></pre>
+   </body>
+</html>

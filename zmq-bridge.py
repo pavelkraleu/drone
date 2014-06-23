@@ -8,7 +8,7 @@ if len(sys.argv) != 4:
 	print("")
 	print("brige_type : {telemetry,images,config}")
 	print("listen_endpoint : ZMQ listening endpoint - tcp://0.0.0.0:4000")
-	print("connect_to : ZMQ endpoint of WS server - tcp://10.8.0.1:5000")
+	print("connect_to : ZMQ listening endpoint for WS server - tcp://0.0.0.0:5000")
 	sys.exit(1)
 
 bridge_type = sys.argv[1]
@@ -36,3 +36,4 @@ while True:
 	packet = listen_context.recv_json()
 
 	print(packet)
+

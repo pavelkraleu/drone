@@ -1,11 +1,17 @@
 #!/usr/bin/python2
 
+
+
 import sys
+
+sys.path.remove('/mnt/drone')
+
 import cv2
 import cv2.cv as cv
 import numpy
 import zmq
 import time
+
 
 
 if len(sys.argv) != 4:
